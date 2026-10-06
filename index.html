@@ -18,10 +18,12 @@ h1{font-size:15px;font-weight:normal;color:var(--mute);margin:0 0 6px}
 .price small{font-size:18px;color:var(--mute);letter-spacing:0;margin-left:6px}
 .chg{margin:10px 0 28px;font-size:16px}
 .up{color:var(--up)}.down{color:var(--down)}
-svg{width:100%;height:90px;display:block;margin-bottom:28px}
 table{width:100%;border-collapse:collapse;font-size:18px}
 td{padding:12px 0;border-top:1px solid var(--line)}
 td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+h2{font-size:15px;font-weight:normal;color:var(--mute);margin:32px 0 8px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{fill:var(--mute);font:11px Georgia,serif}
 p{color:var(--mute);font-size:13px;line-height:1.5;margin-top:24px}
 </style>
 </head>
@@ -29,11 +31,40 @@ p{color:var(--mute);font-size:13px;line-height:1.5;margin-top:24px}
 <h1 id="when">Loading…</h1>
 <div class="price"><span id="p">–</span><small>AED / gram, 24K</small></div>
 <div class="chg" id="c"></div>
-<svg id="spark" viewBox="0 0 300 90" preserveAspectRatio="none"></svg>
 <table id="t"></table>
+<h2>Last 7 days, 24K</h2>
+<svg id="chart" viewBox="0 0 320 190" role="img" aria-label="24K gold price, last 7 days"></svg>
 <p>Spot-based estimate. Dubai jewellery shops add making charges and a margin, so shop prices run higher.</p>
 <script>
 const f=n=>n.toLocaleString("en",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function drawChart(d){
+  const day=86400000, parse=x=>new Date(x+"T00:00:00").getTime();
+  const end=parse(d.at(-1).date), begin=end-6*day;
+  const pts=d.map(e=>({t:parse(e.date),v:e.k24})).filter(p=>p.t>=begin);
+  const W=320,H=190,L=46,R=12,T=14,B=28,w=W-L-R,h=H-T-B;
+  const vals=pts.map(p=>p.v);
+  let mn=Math.min(...vals),mx=Math.max(...vals),pad=(mx-mn)*0.25||mx*0.005;
+  mn-=pad;mx+=pad;
+  const X=t=>L+(t-begin)/(6*day)*w, Y=v=>T+h-(v-mn)/(mx-mn)*h;
+  let o="";
+  for(let i=0;i<3;i++){
+    const v=mn+(mx-mn)*i/2,y=Y(v);
+    o+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-6}" y="${y+4}" text-anchor="end">${v.toFixed(1)}</text>`;
+  }
+  for(let i=0;i<7;i++){
+    const t=begin+i*day;
+    o+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${new Date(t).toLocaleDateString("en",{weekday:"short"})}</text>`;
+  }
+  if(pts.length>1)o+=`<polyline points="${pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach((p,i)=>{
+    const last=i===pts.length-1;
+    o+=`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${last?5:3.5}" fill="${last?"var(--gold)":"var(--bg)"}" stroke="var(--gold)" stroke-width="2"/>`;
+  });
+  const lp=pts.at(-1);
+  o+=`<text x="${Math.min(X(lp.t),W-R-14)}" y="${Y(lp.v)-11}" text-anchor="middle" style="fill:var(--ink)">${lp.v.toFixed(2)}</text>`;
+  document.getElementById("chart").innerHTML=o;
+}
 fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
   if(!d.length){document.getElementById("when").textContent="No data yet. Run the workflow once.";return}
   const l=d.at(-1),p=d.at(-2);
@@ -42,10 +73,7 @@ fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
   if(p){const x=l.k24-p.k24,pc=x/p.k24*100;
     document.getElementById("c").innerHTML=`<span class="${x>=0?"up":"down"}">${x>=0?"▲":"▼"} ${f(Math.abs(x))} (${pc.toFixed(2)}%)</span> since ${p.date}`}
   document.getElementById("t").innerHTML=[["22K","k22"],["21K","k21"],["18K","k18"]].map(([n,k])=>`<tr><td>${n}</td><td>${f(l[k])}</td></tr>`).join("");
-  const v=d.slice(-30).map(e=>e.k24);
-  if(v.length>1){const mn=Math.min(...v),mx=Math.max(...v),r=mx-mn||1;
-    const pts=v.map((y,i)=>`${i/(v.length-1)*300},${80-(y-mn)/r*70}`).join(" ");
-    document.getElementById("spark").innerHTML=`<polyline points="${pts}" fill="none" stroke="var(--gold)" stroke-width="2" vector-effect="non-scaling-stroke"/>`}
+  drawChart(d);
 }).catch(()=>document.getElementById("when").textContent="Couldn't load data.json");
 </script>
 </body>
