@@ -25,7 +25,12 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 h2{font-size:15px;font-weight:normal;color:var(--mute);margin:32px 0 8px}
 svg{width:100%;height:auto;display:block;overflow:visible}
 svg text{fill:var(--mute);font:11px Georgia,serif}
+section{margin-top:44px;padding-top:8px;border-top:1px solid var(--ink)}
+.conv{display:flex;align-items:center;gap:10px;margin:22px 0 0;font-size:18px}
+.conv input{width:110px;font:18px Georgia,serif;color:var(--ink);background:none;border:1px solid var(--line);padding:8px 10px}
+.conv b{font-weight:normal;color:var(--gold);font-size:22px}
 p{color:var(--mute);font-size:13px;line-height:1.5;margin-top:24px}
+a{color:inherit}
 </style>
 </head>
 <body>
@@ -35,47 +40,63 @@ p{color:var(--mute);font-size:13px;line-height:1.5;margin-top:24px}
 <table id="t"></table>
 <h2>Last 7 days, 24K</h2>
 <svg id="chart" viewBox="0 0 320 190" role="img" aria-label="24K gold price, last 7 days"></svg>
-<p>Spot-based estimate. Dubai jewellery shops add making charges and a margin, so shop prices run higher.</p>
-<script>
-const f=n=>n.toLocaleString("en",{minimumFractionDigits:2,maximumFractionDigits:2});
 
-function drawChart(d){
-  const day=86400000, parse=x=>new Date(x+"T00:00:00").getTime();
-  const end=parse(d.at(-1).date), begin=end-6*day;
-  const pts=d.map(e=>({t:parse(e.date),v:e.k24})).filter(p=>p.t>=begin);
-  const W=320,H=190,L=46,R=12,T=14,B=28,w=W-L-R,h=H-T-B;
-  const vals=pts.map(p=>p.v);
-  let mn=Math.min(...vals),mx=Math.max(...vals),pad=(mx-mn)*0.25||mx*0.005;
-  mn-=pad;mx+=pad;
-  const X=t=>L+(t-begin)/(6*day)*w, Y=v=>T+h-(v-mn)/(mx-mn)*h;
+<section>
+<h1>AED → PHP, daily rate</h1>
+<div class="price"><span id="fx">–</span><small>₱ per 1 AED</small></div>
+<div class="chg" id="fxc"></div>
+<table id="ft"></table>
+<div class="conv"><input id="amt" type="number" inputmode="decimal" value="100" aria-label="Amount in AED"> AED = <b id="out">–</b></div>
+<h2>Last 7 days, AED → PHP</h2>
+<svg id="fxchart" viewBox="0 0 320 190" role="img" aria-label="AED to PHP rate, last 7 days"></svg>
+</section>
+
+<p>Gold: spot-based estimate. Dubai jewellery shops add making charges and a margin, so shop prices run higher. Currency rates are daily reference rates, not bank or remittance-centre rates, which differ slightly. <a href="https://www.exchangerate-api.com">Rates by ExchangeRate-API</a>.</p>
+<script>
+const f=(n,d=2)=>n.toLocaleString("en",{minimumFractionDigits:d,maximumFractionDigits:d});
+const $=id=>document.getElementById(id);
+function drawChart(id,rows,key,dec){
+  const el=$(id),pts0=rows.filter(r=>r[key]!=null);
+  if(!pts0.length){el.innerHTML='<text x="160" y="95" text-anchor="middle">Collecting data. First rate arrives with the next update.</text>';return}
+  const day=864e5,parse=x=>new Date(x+"T00:00:00").getTime();
+  const end=parse(pts0.at(-1).date),begin=end-6*day;
+  const pts=pts0.map(e=>({t:parse(e.date),v:e[key]})).filter(p=>p.t>=begin);
+  const W=320,H=190,L=50,R=12,T=14,B=28,w=W-L-R,h=H-T-B,vals=pts.map(p=>p.v);
+  let mn=Math.min(...vals),mx=Math.max(...vals),pad=(mx-mn)*0.25||mx*0.005;mn-=pad;mx+=pad;
+  const X=t=>L+(t-begin)/(6*day)*w,Y=v=>T+h-(v-mn)/(mx-mn)*h;
   let o="";
-  for(let i=0;i<3;i++){
-    const v=mn+(mx-mn)*i/2,y=Y(v);
-    o+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-6}" y="${y+4}" text-anchor="end">${v.toFixed(1)}</text>`;
-  }
-  for(let i=0;i<7;i++){
-    const t=begin+i*day;
-    o+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${new Date(t).toLocaleDateString("en",{weekday:"short"})}</text>`;
-  }
+  for(let i=0;i<3;i++){const v=mn+(mx-mn)*i/2,y=Y(v);
+    o+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-6}" y="${y+4}" text-anchor="end">${v.toFixed(dec>2?2:1)}</text>`}
+  for(let i=0;i<7;i++){const t=begin+i*day;
+    o+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${new Date(t).toLocaleDateString("en",{weekday:"short"})}</text>`}
   if(pts.length>1)o+=`<polyline points="${pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
-  pts.forEach((p,i)=>{
-    const last=i===pts.length-1;
-    o+=`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${last?5:3.5}" fill="${last?"var(--gold)":"var(--bg)"}" stroke="var(--gold)" stroke-width="2"/>`;
-  });
+  pts.forEach((p,i)=>{const last=i===pts.length-1;
+    o+=`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${last?5:3.5}" fill="${last?"var(--gold)":"var(--bg)"}" stroke="var(--gold)" stroke-width="2"/>`});
   const lp=pts.at(-1);
-  o+=`<text x="${Math.min(X(lp.t),W-R-14)}" y="${Y(lp.v)-11}" text-anchor="middle" style="fill:var(--ink)">${lp.v.toFixed(2)}</text>`;
-  document.getElementById("chart").innerHTML=o;
+  o+=`<text x="${Math.min(X(lp.t),W-R-14)}" y="${Y(lp.v)-11}" text-anchor="middle" style="fill:var(--ink)">${lp.v.toFixed(dec)}</text>`;
+  el.innerHTML=o;
 }
+const change=(l,p,key,dec)=>{const x=l[key]-p[key],pc=x/p[key]*100;
+  return `<span class="${x>=0?"up":"down"}">${x>=0?"▲":"▼"} ${f(Math.abs(x),dec)} (${pc.toFixed(2)}%)</span> since ${p.date}`};
 fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
-  if(!d.length){document.getElementById("when").textContent="No data yet. Run the workflow once.";return}
+  if(!d.length){$("when").textContent="No data yet. Run the workflow once.";return}
   const l=d.at(-1),p=d.at(-2);
-  document.getElementById("when").textContent="Dubai gold, "+new Date(l.date).toLocaleDateString("en",{day:"numeric",month:"long",year:"numeric"});
-  document.getElementById("p").textContent=f(l.k24);
-  if(p){const x=l.k24-p.k24,pc=x/p.k24*100;
-    document.getElementById("c").innerHTML=`<span class="${x>=0?"up":"down"}">${x>=0?"▲":"▼"} ${f(Math.abs(x))} (${pc.toFixed(2)}%)</span> since ${p.date}`}
-  document.getElementById("t").innerHTML=[["22K","k22"],["21K","k21"],["18K","k18"]].map(([n,k])=>`<tr><td>${n}</td><td>${f(l[k])}</td></tr>`).join("");
-  drawChart(d);
-}).catch(()=>document.getElementById("when").textContent="Couldn't load data.json");
+  $("when").textContent="Dubai gold, "+new Date(l.date).toLocaleDateString("en",{day:"numeric",month:"long",year:"numeric"});
+  $("p").textContent=f(l.k24);
+  if(p)$("c").innerHTML=change(l,p,"k24",2);
+  $("t").innerHTML=[["22K","k22"],["21K","k21"],["18K","k18"]].map(([n,k])=>`<tr><td>${n}</td><td>${f(l[k])}</td></tr>`).join("");
+  drawChart("chart",d,"k24",2);
+  // AED -> PHP
+  const fx=d.filter(e=>e.php!=null),lf=fx.at(-1),pf=fx.at(-2);
+  drawChart("fxchart",d,"php",3);
+  if(lf){
+    $("fx").textContent=f(lf.php,3);
+    if(pf)$("fxc").innerHTML=change(lf,pf,"php",3);
+    $("ft").innerHTML=`<tr><td>1 PHP</td><td>${f(1/lf.php,4)} AED</td></tr><tr><td>24K gold, per gram</td><td>₱ ${f(l.k24*lf.php,0)}</td></tr>`;
+    const calc=()=>{$("out").textContent="₱ "+f((parseFloat($("amt").value)||0)*lf.php,2)};
+    $("amt").oninput=calc;calc();
+  }else $("fxc").textContent="First rate arrives with the next daily update.";
+}).catch(()=>$("when").textContent="Couldn't load data.json");
 </script>
 </body>
 </html>
