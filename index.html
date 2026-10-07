@@ -98,5 +98,19 @@ fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
   }else $("fxc").textContent="First rate arrives with the next daily update.";
 }).catch(()=>$("when").textContent="Couldn't load data.json");
 </script>
+  <div style="text-align:center; margin:24px 0 32px;">
+  <button id="refreshBtn" type="button"
+    style="font-size:16px; padding:12px 28px; border:none; border-radius:12px;
+           background:#d4a017; color:#1a1a1a; font-weight:600; cursor:pointer;">
+    ↻ Refresh
+  </button>
+</div>
+
+<script>
+  document.getElementById('refreshBtn').addEventListener('click', function () {
+    this.textContent = 'Refreshing…';
+    window.location.href = window.location.pathname + '?r=' + Date.now();
+  });
+</script>
 </body>
 </html>
