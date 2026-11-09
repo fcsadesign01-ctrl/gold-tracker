@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ETFs">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon.png">
+<title>ETF Tracker</title>
+<style>
+:root{--bg:#f5f1e8;--ink:#2a2418;--mute:#7a705c;--line:#d9d0b8;--up:#2f6b3a;--down:#a23b2a;--gold:#b8860b}
+@media(prefers-color-scheme:dark){:root{--bg:#14110b;--ink:#f1e9d2;--mute:#9a8f75;--line:#2e2819;--up:#7ec48a;--down:#e3806e;--gold:#e0b23c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,"Times New Roman",serif;
+padding:calc(env(safe-area-inset-top) + 28px) 24px calc(env(safe-area-inset-bottom) + 28px);max-width:480px;margin-inline:auto}
+h1{font-size:15px;font-weight:normal;color:var(--mute);margin:0 0 6px}
+.price{font-size:64px;line-height:1;letter-spacing:-1px;color:var(--gold)}
+.price small{font-size:18px;color:var(--mute);letter-spacing:0;margin-left:6px}
+.chg{margin:10px 0 6px;font-size:16px}
+.asof{font-size:13px;color:var(--mute);margin:0 0 14px}
+.up{color:var(--up)}.down{color:var(--down)}
+table{width:100%;border-collapse:collapse;font-size:18px}
+td{padding:12px 0;border-top:1px solid var(--line)}
+td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+h2{font-size:15px;font-weight:normal;color:var(--mute);margin:32px 0 8px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{fill:var(--mute);font:11px Georgia,serif}
+section{margin-top:44px;padding-top:8px;border-top:1px solid var(--ink)}
+section:first-of-type{margin-top:28px}
+p{color:var(--mute);font-size:13px;line-height:1.5;margin-top:24px}
+a{color:inherit}
+.nav{font-size:15px;margin:0 0 18px}
+</style>
+</head>
+<body>
+<div class="nav"><a href="index.html">← Gold</a></div>
+<div id="list"><h1>Loading…</h1></div>
+
+<p>Prices from Yahoo Finance (unofficial feed), updated every 30 minutes while the US market is open. They can be delayed about 15 minutes and are not tick-by-tick. AED value uses the fixed 3.6725 peg. Information only, not investment advice.</p>
+
+<div style="text-align:center; margin:24px 0 32px;">
+  <button id="refreshBtn" type="button"
+    style="font-family:Georgia,serif; font-size:16px; padding:12px 28px; border:none; border-radius:12px;
+           background:#d4a017; color:#1a1a1a; font-weight:600; cursor:pointer;">
+    ↻ Refresh
+  </button>
+</div>
+
+<script>
+const NAMES={VOO:"Vanguard S&P 500 ETF",VXUS:"Vanguard Total International Stock ETF"};
+const PEG=3.6725;
+const f=(n,d=2)=>n.toLocaleString("en",{minimumFractionDigits:d,maximumFractionDigits:d});
+const $=id=>document.getElementById(id);
+function drawChart(id,rows,key,dec){
+  const el=$(id),pts0=rows.filter(r=>r[key]!=null);
+  if(!pts0.length){el.innerHTML='<text x="160" y="95" text-anchor="middle">No data yet.</text>';return}
+  const day=864e5,parse=x=>new Date(x+"T00:00:00").getTime();
+  const end=parse(pts0.at(-1).date),begin=end-6*day;
+  const pts=pts0.map(e=>({t:parse(e.date),v:e[key]})).filter(p=>p.t>=begin);
+  const W=320,H=190,L=50,R=12,T=14,B=28,w=W-L-R,h=H-T-B,vals=pts.map(p=>p.v);
+  let mn=Math.min(...vals),mx=Math.max(...vals),pad=(mx-mn)*0.25||mx*0.005;mn-=pad;mx+=pad;
+  const X=t=>L+(t-begin)/(6*day)*w,Y=v=>T+h-(v-mn)/(mx-mn)*h;
+  let o="";
+  for(let i=0;i<3;i++){const v=mn+(mx-mn)*i/2,y=Y(v);
+    o+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-6}" y="${y+4}" text-anchor="end">${v.toFixed(1)}</text>`}
+  for(let i=0;i<7;i++){const t=begin+i*day;
+    o+=`<text x="${X(t)}" y="${H-8}" text-anchor="middle">${new Date(t).toLocaleDateString("en",{weekday:"short"})}</text>`}
+  if(pts.length>1)o+=`<polyline points="${pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach((p,i)=>{const last=i===pts.length-1;
+    o+=`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${last?5:3.5}" fill="${last?"var(--gold)":"var(--bg)"}" stroke="var(--gold)" stroke-width="2"/>`});
+  const lp=pts.at(-1);
+  o+=`<text x="${Math.min(X(lp.t),W-R-14)}" y="${Y(lp.v)-11}" text-anchor="middle" style="fill:var(--ink)">${lp.v.toFixed(dec)}</text>`;
+  el.innerHTML=o;
+}
+fetch("etf.json?"+Date.now()).then(r=>r.json()).then(d=>{
+  const syms=Object.keys(d.symbols||{});
+  if(!syms.length){$("list").innerHTML="<h1>No data yet. Run the ETF workflow once.</h1>";return}
+  $("list").innerHTML=syms.map(s=>{
+    const e=d.symbols[s],x=e.price-e.prev,pc=x/e.prev*100,up=x>=0;
+    const t=e.market_time?new Date(e.market_time).toLocaleString("en",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"Asia/Dubai"})+" Dubai time":"";
+    return `<section><h1>${s} · ${NAMES[s]||""}</h1>
+<div class="price"><span>${f(e.price)}</span><small>USD</small></div>
+<div class="chg"><span class="${up?"up":"down"}">${up?"▲":"▼"} ${f(Math.abs(x))} (${pc.toFixed(2)}%)</span> vs previous close</div>
+<div class="asof">Price as of ${t}</div>
+<table><tr><td>In AED</td><td>${f(e.price*PEG)}</td></tr><tr><td>Previous close</td><td>$${f(e.prev)}</td></tr></table>
+<h2>Last 7 days, ${s}</h2>
+<svg id="ch_${s}" viewBox="0 0 320 190" role="img" aria-label="${s} price, last 7 days"></svg></section>`}).join("");
+  syms.forEach(s=>drawChart("ch_"+s,d.symbols[s].history,"c",2));
+}).catch(()=>$("list").innerHTML="<h1>Couldn't load etf.json</h1>");
+document.getElementById('refreshBtn').addEventListener('click',function(){
+  this.textContent='Refreshing…';
+  window.location.href=window.location.pathname+'?r='+Date.now();
+});
+</script>
+</body>
+</html>
